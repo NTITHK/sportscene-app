@@ -1,29 +1,45 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { useFonts } from 'expo-font';
-import { Stack } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import 'react-native-reanimated';
+import { AuthProvider, useAuth } from '@/context/AuthContext';
+import { LocaleProvider } from '@/context/LocaleContext';
+import Constants from 'expo-constants';
+import { Stack, useRouter, useSegments } from 'expo-router';
+import React, { useEffect } from 'react';
 
-import { useColorScheme } from '@/hooks/useColorScheme';
 
-export default function RootLayout() {
-  const colorScheme = useColorScheme();
-  const [loaded] = useFonts({
-    SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
-  });
+function RootNavigator() {
+const { isLoading, token } = useAuth();
+const segments = useSegments();
+const router = useRouter();
 
-  if (!loaded) {
-    // Async font loading only occurs in development.
-    return null;
-  }
 
-  return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="+not-found" />
-      </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
-  );
+useEffect(() => {
+if (isLoading) return;
+const inAuth = segments[0] === '(auth)';
+const inPublic = segments[0] === '(public)';
+if (!token && !inAuth && !inPublic) router.replace('/(public)/landing');
+if (token && (inAuth || inPublic)) router.replace('/');
+}, [isLoading, token, segments, router]);
+
+
+return (
+<Stack screenOptions={{ headerShadowVisible: false }}>
+<Stack.Screen name="(public)/landing" options={{ headerShown: false }} />
+<Stack.Screen name="(auth)/login" options={{ title: 'Login' }} />
+<Stack.Screen name="(auth)/register" options={{ title: 'Register' }} />
+<Stack.Screen name="(auth)/forgot" options={{ title: 'Forgot Password' }} />
+<Stack.Screen name="index" options={{ title: 'Home' }} />
+<Stack.Screen name="members/index" options={{ title: 'Members' }} />
+</Stack>
+);
+}
+
+
+export default function Layout() {
+const defaultLocale = ((Constants.expoConfig?.extra || {}) as any).defaultLocale || 'zh-Hant';
+return (
+<LocaleProvider defaultLocale={defaultLocale}>
+<AuthProvider>
+<RootNavigator />
+</AuthProvider>
+</LocaleProvider>
+);
 }
