@@ -1,22 +1,27 @@
+import { useAuth } from '@/context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-    KeyboardAvoidingView,
-    Platform,
-    Pressable,
-    SafeAreaView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-
-// Shared logo (put logo at /assets/logo.jpg)
 import AppLogo from '../../components/AppLogo';
+import { setSession } from '../../lib/session';
 
-// --- i18n strings ---
+// ---- Your endpoint ----
+const LOGIN_API_URL = 'https://app.sportsceneltd.com/api/login.php';
+
+// ---- i18n strings ----
 type Lang = 'zh-Hant' | 'zh-Hans' | 'en';
 const STR = {
   'zh-Hant': {
@@ -27,11 +32,15 @@ const STR = {
     register: '註冊',
     keepLogin: '保持登入',
     forgot: '忘記密碼？',
-    // bottom-right buttons (shown when NOT current language)
-    btnHans: '简体',
+    btnHans: '简',
     btnEn: 'English',
     btnHantShort: '繁',
     btnHansShort: '简',
+    errEmailFormat: '請輸入有效的電郵地址。',
+    errEmptyPassword: '請輸入密碼。',
+    errNetwork: '網絡錯誤，請稍後重試。',
+    errUnknown: '登入失敗。',
+    okWelcome: '登入成功。',
   },
   'zh-Hans': {
     title: '会员登录',
@@ -41,10 +50,15 @@ const STR = {
     register: '注册',
     keepLogin: '保持登录',
     forgot: '忘记密码？',
-    btnHans: '简体',
+    btnHans: '简',
     btnEn: 'English',
     btnHantShort: '繁',
     btnHansShort: '简',
+    errEmailFormat: '请输入有效的电邮地址。',
+    errEmptyPassword: '请输入密码。',
+    errNetwork: '网络错误，请稍后重试。',
+    errUnknown: '登录失败。',
+    okWelcome: '登录成功。',
   },
   en: {
     title: 'Member Login',
@@ -58,10 +72,15 @@ const STR = {
     btnEn: 'English',
     btnHantShort: '繁',
     btnHansShort: '简',
+    errEmailFormat: 'Please enter a valid email address.',
+    errEmptyPassword: 'Please enter your password.',
+    errNetwork: 'Network error. Please try again later.',
+    errUnknown: 'Login failed.',
+    okWelcome: 'Logged in successfully.',
   },
 } as const;
 
-// Lightweight local checkbox (blue when active)
+// ---- Small blue checkbox (no dependency) ----
 function Box({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
   return (
     <Pressable onPress={() => onChange(!value)} style={[styles.checkboxBox, value && styles.checkboxBoxActive]} hitSlop={8}>
@@ -71,40 +90,86 @@ function Box({ value, onChange }: { value: boolean; onChange: (v: boolean) => vo
 }
 
 export default function Landing() {
-  const [lang, setLang] = useState<Lang>('zh-Hant'); // default 繁體
+  const { setToken, setUser } = useAuth(); // ✅ use inside component
+  const [lang, setLang] = useState<Lang>('zh-Hant');
   const T = STR[lang];
 
   const [email, setEmail] = useState('');
   const [pw, setPw] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [keepLogin, setKeepLogin] = useState(true);
+  const [loading, setLoading] = useState(false);
 
-  // dim placeholders that clear on focus / restore on blur (per current language)
+  // localized placeholders that clear/restore
   const [emailPH, setEmailPH] = useState<string>(T.emailPH);
   const [pwPH, setPwPH] = useState<string>(T.passwordPH);
 
-  // Refresh placeholders on language change only if fields are empty
+  // On language change, refresh placeholders if fields are empty
   useEffect(() => {
     if (!email) setEmailPH(STR[lang].emailPH);
     if (!pw) setPwPH(STR[lang].passwordPH);
-  }, [lang]); // eslint-disable-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lang]);
 
-  const onLogin = () => {
-    // TODO: call your signIn(email, pw, { keepLogin })
-    router.replace('/home');
+  const isValidEmail = (s: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.trim());
+
+  // SINGLE parsing path: read text, then safe JSON.parse (handles trailing chars, e.g., '%')
+  const onLogin = async () => {
+    if (!isValidEmail(email)) { Alert.alert(T.errEmailFormat); return; }
+    if (!pw) { Alert.alert(T.errEmptyPassword); return; }
+
+    setLoading(true);
+    try {
+      const res = await fetch(LOGIN_API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: email.trim(),
+          password: pw,
+          remember: keepLogin ? 1 : 0,
+          lang, // optional: send UI language
+        }),
+      });
+
+      const raw = await res.text();
+      let data: any = null;
+      try {
+        data = JSON.parse(raw);
+      } catch {
+        const start = raw.indexOf('{');
+        const end = raw.lastIndexOf('}');
+        if (start >= 0 && end > start) data = JSON.parse(raw.slice(start, end + 1));
+      }
+
+      if (!data || typeof data !== 'object' || !data.access_token) {
+        Alert.alert(data?.message || data?.error || raw?.slice(0, 300) || T.errUnknown);
+        return;
+      }
+
+      // ✅ Persist full payload for profile page, and set AuthContext token/user for guard
+      await setSession({ ...data, lang });
+      await setToken(data.access_token);
+      if (data.parent?.email) await setUser({ email: data.parent.email });
+
+      router.replace('/member_profile');
+    } catch (e) {
+      Alert.alert(T.errNetwork);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <SafeAreaView style={styles.safe}>
       <KeyboardAvoidingView behavior={Platform.select({ ios: 'padding', android: undefined })} style={{ flex: 1 }}>
         <View style={styles.container}>
-          {/* Logo — fixed size 450 and centered */}
+          {/* Fixed 450x450 logo */}
           <AppLogo style={styles.logo} />
 
           {/* Title */}
           <Text style={styles.title}>{T.title}</Text>
 
-          {/* Email (no label, dim placeholder) */}
+          {/* Email */}
           <View style={styles.fieldWrap}>
             <TextInput
               style={styles.input}
@@ -120,7 +185,7 @@ export default function Landing() {
             />
           </View>
 
-          {/* Password with dim eye icon (inside field), no label */}
+          {/* Password */}
           <View style={styles.fieldWrap}>
             <View style={styles.pwdRow}>
               <TextInput
@@ -134,6 +199,7 @@ export default function Landing() {
                 secureTextEntry={!showPw}
                 autoCapitalize="none"
                 returnKeyType="done"
+                onSubmitEditing={onLogin}
               />
               <Pressable style={styles.eyeBtn} onPress={() => setShowPw(s => !s)} hitSlop={8}>
                 <Ionicons name={showPw ? 'eye-off' : 'eye'} size={22} color="#9aa3af" />
@@ -141,9 +207,9 @@ export default function Landing() {
             </View>
           </View>
 
-          {/* Buttons */}
-          <Pressable style={styles.loginBtn} onPress={onLogin}>
-            <Text style={styles.loginTxt}>{T.login}</Text>
+          {/* Login / Register */}
+          <Pressable style={[styles.loginBtn, loading && { opacity: 0.7 }]} onPress={onLogin} disabled={loading}>
+            {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.loginTxt}>{T.login}</Text>}
           </Pressable>
 
           <Pressable style={styles.registerBtn} onPress={() => router.push('/(auth)/register')}>
@@ -161,29 +227,26 @@ export default function Landing() {
             </TouchableOpacity>
           </View>
 
-          {/* Bottom-right: show ONLY the other languages per current selection */}
+          {/* Bottom-right language buttons: show only other languages */}
           <View style={styles.langBottomRight}>
             {lang !== 'zh-Hant' && (
               <TouchableOpacity onPress={() => setLang('zh-Hant')}>
-                {/* When current = 简体 → show "繁"; when current = English → show "繁" */}
                 <Text style={styles.langLink}>{STR[lang].btnHantShort}</Text>
               </TouchableOpacity>
             )}
             {lang === 'zh-Hant' && (
               <TouchableOpacity onPress={() => setLang('zh-Hans')}>
-                <Text style={[styles.langLink, { marginLeft: 0 }]}>{STR[lang].btnHans}</Text>
+                <Text style={styles.langLink}>{T.btnHans}</Text>
               </TouchableOpacity>
             )}
-            {/* Show English if not already English */}
             {lang !== 'en' && (
-              <TouchableOpacity onPress={() => setLang('en')}>
-                <Text style={[styles.langLink, { marginLeft: 16 }]}>{STR[lang].btnEn}</Text>
+              <TouchableOpacity style={{ marginLeft: 16 }} onPress={() => setLang('en')}>
+                <Text style={styles.langLink}>{T.btnEn}</Text>
               </TouchableOpacity>
             )}
-            {/* Show 简 when in English */}
             {lang === 'en' && (
-              <TouchableOpacity onPress={() => setLang('zh-Hans')}>
-                <Text style={[styles.langLink, { marginLeft: 16 }]}>{STR[lang].btnHansShort}</Text>
+              <TouchableOpacity style={{ marginLeft: 16 }} onPress={() => setLang('zh-Hans')}>
+                <Text style={styles.langLink}>{T.btnHansShort}</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -201,7 +264,7 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#fff' },
   container: { flex: 1, alignItems: 'center', paddingHorizontal: 24 },
 
-  // ✅ Fixed forever: 450 x 450
+  // Fixed forever: 450 x 450
   logo: { width: 450, height: 450, marginTop: 12, marginBottom: 8 },
 
   title: { fontSize: 35, fontWeight: '700', color: BLUE_DARK, marginBottom: 10 },
