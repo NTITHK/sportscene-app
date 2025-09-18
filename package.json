@@ -18,7 +18,9 @@
     "expo-secure-store": "*",
     "i18n-js": "^4.5.1",
     "react": "*",
-    "react-native": "*"
+    "react-native": "*",
+    "react-native-safe-area-context": "5.4.0",
+    "react-native-screens": "~4.11.1"
   },
   "devDependencies": {
     "@types/react": "*",
