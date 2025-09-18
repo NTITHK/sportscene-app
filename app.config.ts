@@ -2,7 +2,7 @@ import { ExpoConfig } from 'expo/config';
 
 
 const config: ExpoConfig = {
-name: 'Sportscene',
+name: 'Sportscene App',
 slug: 'sportscene-app',
 scheme: 'sportscene',
 plugins: ['expo-router'],

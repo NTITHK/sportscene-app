@@ -19,7 +19,7 @@ import AppLogo from '../../components/AppLogo';
 import { setSession } from '../../lib/session';
 
 // ---- Your endpoint ----
-const LOGIN_API_URL = 'https://app.sportsceneltd.com/api/login.php';
+const LOGIN_API_URL = 'https://app-test.sportsceneltd.com/api/login.php';
 
 // ---- i18n strings ----
 type Lang = 'zh-Hant' | 'zh-Hans' | 'en';
