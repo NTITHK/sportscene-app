@@ -42,7 +42,10 @@ function RootNavigator() {
   }, [isLoading, token, segments, router]);
 
   return (
-    <Stack screenOptions={{ headerShadowVisible: false }}>
+    <Stack
+      initialRouteName="(public)/landing"
+      screenOptions={{ headerShadowVisible: false }}
+    >
       <Stack.Screen name="(public)/landing" options={{ headerShown: false }} />
       <Stack.Screen name="(auth)/login" options={{ title: 'Login' }} />
       <Stack.Screen name="(auth)/register" options={{ title: 'Register' }} />
