@@ -161,7 +161,8 @@ export default function Landing() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <KeyboardAvoidingView behavior={Platform.select({ ios: 'padding', android: undefined })} style={{ flex: 1 }}>
+      <KeyboardAvoidingView behavior={Platform.select({ ios: 'padding', android: undefined })} 
+      style={{ flex: 1, backgroundColor: '#fff' }}>
         <View style={styles.container}>
           {/* Fixed 450x450 logo */}
           <AppLogo style={styles.logo} />
@@ -262,7 +263,7 @@ const BORDER = '#d1d5db';
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#fff' },
-  container: { flex: 1, alignItems: 'center', paddingHorizontal: 24 },
+  container: { flex: 1, alignItems: 'center', paddingHorizontal: 24, backgroundColor: '#fff' },
 
   // Fixed forever: 450 x 450
   logo: { width: 450, height: 450, marginTop: 12, marginBottom: 8 },

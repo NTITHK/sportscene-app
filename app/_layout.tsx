@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { LocaleProvider } from '@/context/LocaleContext';
 import Constants from 'expo-constants';
 import { Stack, useRouter, useSegments } from 'expo-router';
+import * as SplashScreen from 'expo-splash-screen';
 import React, { useEffect, useRef } from 'react';
 
 function RootNavigator() {
@@ -12,18 +13,18 @@ function RootNavigator() {
   const hasRouted = useRef(false);
 
   useEffect(() => {
-    if (isLoading) return; // wait until AuthProvider finished restoring
+    if (isLoading) return;
 
-    const top = segments[0]; // e.g. '(public)', '(auth)', 'member_profile', 'index'
+    // extra safety: hide splash on first frame after auth restores
+    SplashScreen.hideAsync().catch(() => {});
+
+    const top = segments[0]; // '(public)', '(auth)', 'member_profile', etc.
     const inAuth = top === '(auth)';
     const inPublic = top === '(public)';
-    const onProfile = top === 'member_profile'; // file: app/member_profile.tsx
 
-    // Avoid multiple replace() calls in a single pass
     if (hasRouted.current) return;
 
     if (!token) {
-      // Not logged in → send to landing if not already in public/auth
       if (!inAuth && !inPublic) {
         hasRouted.current = true;
         router.replace('/(public)/landing');
@@ -31,20 +32,24 @@ function RootNavigator() {
       return;
     }
 
-    // Logged in:
+    // logged in
     if (inAuth || inPublic) {
       hasRouted.current = true;
       router.replace('/member_profile');
-      return;
     }
-
-    // If already on member_profile or other private routes, do nothing
   }, [isLoading, token, segments, router]);
+
+  // 👉 Don’t render any route until auth is ready
+  if (isLoading) return null;
 
   return (
     <Stack
       initialRouteName="(public)/landing"
-      screenOptions={{ headerShadowVisible: false }}
+      screenOptions={{
+        headerShadowVisible: false,
+        animation: 'none',
+        contentStyle: { backgroundColor: '#fff' }, // no transparent flash
+      }}
     >
       <Stack.Screen name="(public)/landing" options={{ headerShown: false }} />
       <Stack.Screen name="(auth)/login" options={{ title: 'Login' }} />
