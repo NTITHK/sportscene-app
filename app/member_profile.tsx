@@ -1,152 +1,242 @@
-// app/member_profile.tsx
-import React, { useEffect, useState } from 'react';
-import { FlatList, Platform, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import AppLogo from '../components/AppLogo';
-import { getSession } from '../lib/session';
+import { getSession } from '@/lib/session';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  ActionSheetIOS,
+  Alert,
+  Image,
+  Modal,
+  Platform,
+  Pressable,
+  SafeAreaView,
+  ScrollView, StatusBar, StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
+} from 'react-native';
 
-// app/member_profile.tsx (inside the component render)
-import { router } from 'expo-router';
-import { clearSession } from '../lib/session';
+type Child = { id: number; name: string; dob?: string };
+type Lang = 'zh-Hant' | 'zh-Hans' | 'en';
 
-// Add near the title:
-<TouchableOpacity
-  onPress={async () => { await clearSession(); router.replace('/(public)/landing'); }}
-  style={{ position: 'absolute', right: 24, top: 24 }}
->
-  <Text style={{ color: '#1d4ed8', fontWeight: '700' }}>Logout</Text>
-</TouchableOpacity>
-
-const BLUE_DARK = '#0b4aa2';
+const BLUE = '#1561AF';
+const BLUE_LIGHT = '#1d69d8';
+const BLUE_BG = '#e6eefc';
+const SCREEN_BG = '#f2f6fb';
+const CARD_BG = '#ffffff';
 const BORDER = '#e5e7eb';
 
 const STR = {
-  'zh-Hant': {
-    title: '會員資料',
-    parentEmail: '家長電郵',
-    tokens: '登入權杖',
-    access: '存取權杖',
-    refresh: '更新權杖',
-    children: '子女',
-    id: '編號',
-    name: '姓名',
-    dob: '出生日期',
-    missing: '沒有資料可顯示。',
-  },
-  'zh-Hans': {
-    title: '会员资料',
-    parentEmail: '家长电邮',
-    tokens: '登录令牌',
-    access: '访问令牌',
-    refresh: '刷新令牌',
-    children: '子女',
-    id: '编号',
-    name: '姓名',
-    dob: '出生日期',
-    missing: '没有资料可显示。',
-  },
-  en: {
-    title: 'Member Profile',
-    parentEmail: 'Parent Email',
-    tokens: 'Tokens',
-    access: 'Access Token',
-    refresh: 'Refresh Token',
-    children: 'Children',
-    id: 'ID',
-    name: 'Name',
-    dob: 'Date of Birth',
-    missing: 'No data to display.',
-  },
+  'zh-Hant': { notices: '通告', bills: '賬單', classes: '課堂日期', chooseStudent: '選擇學生', han: '繁', hans: '简', en: 'English' },
+  'zh-Hans': { notices: '通告', bills: '账单', classes: '课堂日期', chooseStudent: '选择学生', han: '繁', hans: '简', en: 'English' },
+  en:        { notices: 'Notices', bills: 'Bills', classes: 'Class Dates', chooseStudent: 'Choose student', han: '繁', hans: '简', en: 'English' },
 } as const;
 
 export default function MemberProfile() {
-  const [lang, setLang] = useState<'zh-Hant' | 'zh-Hans' | 'en'>('zh-Hant');
-  const [p, setP] = useState<Awaited<ReturnType<typeof getSession>>>(null);
+  const router = useRouter();
+  const [lang, setLang] = useState<Lang>('zh-Hant');
+  const T = STR[lang];
+
+  const [children, setChildren] = useState<Child[]>([]);
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  const student = useMemo(() => children[selectedIndex], [children, selectedIndex]);
+  const hasMultiple = children.length > 1;
 
   useEffect(() => {
     (async () => {
-      const sess = await getSession();
-      setP(sess);
-      if (sess?.lang) setLang(sess.lang);
+      try {
+        const session = await getSession();
+        const kids: Child[] = Array.isArray(session?.children) ? session.children : [];
+        setChildren(kids);
+      } catch {
+        Alert.alert(lang === 'en' ? 'Failed to load profile' : '無法載入會員資料');
+      }
     })();
-  }, []);
+  }, [lang]);
 
-  const T = STR[lang];
-
-  const mask = (s?: string, show = 8) =>
-    !s ? '' : (s.length <= show ? s : `${s.slice(0, show)}… (${s.length} chars)`);
+  const openStudentPicker = () => {
+    if (!hasMultiple) return;
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          title: T.chooseStudent,
+          options: [...children.map(c => c.name || `#${c.id}`), '取消'],
+          cancelButtonIndex: children.length,
+        },
+        idx => { if (idx !== undefined && idx >= 0 && idx < children.length) setSelectedIndex(idx); }
+      );
+    } else {
+      setPickerOpen(true);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.container}>
-        <AppLogo style={styles.logo} />
-        <Text style={styles.title}>{T.title}</Text>
+      <StatusBar barStyle="light-content" backgroundColor={BLUE} />
+      <ScrollView contentContainerStyle={styles.scroll}>
+        {/* Top blue banner */}
+        <View style={styles.headerWrap}>
+          <Image
+            source={require('../assets/images/member_header.png')}
+            style={styles.headerImg}
+            resizeMode="cover"
+          />
+          {/* Student name badge (bottom-right over banner) */}
+          <Pressable
+            style={[styles.nameBadge, !hasMultiple && { paddingRight: 12 }]}
+            onPress={openStudentPicker}
+            disabled={!hasMultiple}
+          >
+            <Text style={styles.nameText} numberOfLines={1}>{student?.name || '—'}</Text>
+            {hasMultiple && <Ionicons name="chevron-down" size={16} color="#1e3a8a" />}
+          </Pressable>
+        </View>
 
-        {!p ? (
-          <Text style={styles.missing}>{T.missing}</Text>
-        ) : (
-          <>
-            <View style={styles.card}>
-              <Text style={styles.cardTitle}>{T.parentEmail}</Text>
-              <Text style={styles.value}>{p.parent?.email || '-'}</Text>
-            </View>
+        {/* Sections */}
+        <View style={styles.sections}>
+          {/* a) 通告 — icon + blue arrow; no contents for now */}
+          <SectionCard title={T.notices} icon="megaphone-outline" onPress={() => router.push('/notices')} />
 
-            <View style={styles.card}>
-              <Text style={styles.cardTitle}>{T.tokens}</Text>
-              <Text style={styles.label}>{T.access}</Text>
-              <Text style={styles.mono}>{mask(p.access_token)}</Text>
-              {p.refresh_token ? (
-                <>
-                  <Text style={[styles.label, { marginTop: 8 }]}>{T.refresh}</Text>
-                  <Text style={styles.mono}>{mask(p.refresh_token)}</Text>
-                </>
-              ) : null}
-            </View>
+          {/* b) 賬單 — icon + blue arrow; no contents for now */}
+          <SectionCard title={T.bills} icon="receipt-outline" onPress={() => router.push('/invoices')} />
 
-            <View style={styles.card}>
-              <Text style={styles.cardTitle}>{T.children}</Text>
-              {!p.children?.length ? (
-                <Text style={styles.value}>-</Text>
-              ) : (
-                <FlatList
-                  data={p.children}
-                  keyExtractor={(c) => String(c.id)}
-                  ItemSeparatorComponent={() => <View style={styles.sep} />}
-                  renderItem={({ item }) => (
-                    <View style={styles.rowBetween}>
-                      <Text style={styles.childLeft}>
-                        {T.id}: {item.id}   {T.name}: {item.name}
-                      </Text>
-                      <Text style={styles.childRight}>
-                        {T.dob}: {item.dob}
-                      </Text>
-                    </View>
-                  )}
-                />
-              )}
-            </View>
-          </>
-        )}
+          {/* c) 課堂日期 — icon + blue arrow; calendar prepared here */}
+          <SectionCard title={T.classes} icon="calendar-outline" onPress={() => router.push('/classes')}>
+            <CalendarStub />
+          </SectionCard>
+        </View>
+      </ScrollView>
+
+      {/* Bottom bar (3 icons reserved) */}
+      <View style={styles.bottomBar}>
+        <TouchableOpacity style={styles.bottomBtn}><Ionicons name="menu" size={26} color="#fff" /></TouchableOpacity>
+        <TouchableOpacity style={styles.bottomBtn}><Ionicons name="notifications-outline" size={26} color="#fff" /></TouchableOpacity>
+        <TouchableOpacity style={styles.bottomBtn}><Ionicons name="person-circle-outline" size={26} color="#fff" /></TouchableOpacity>
       </View>
+
+      {/* Language toggles bottom-right */}
+      <View style={styles.langBottomRight}>
+        {lang !== 'zh-Hant' && (<TouchableOpacity onPress={() => setLang('zh-Hant')}><Text style={styles.langLink}>{T.han}</Text></TouchableOpacity>)}
+        {lang !== 'zh-Hans' && (<TouchableOpacity style={{ marginLeft: 14 }} onPress={() => setLang('zh-Hans')}><Text style={styles.langLink}>{T.hans}</Text></TouchableOpacity>)}
+        {lang !== 'en' && (<TouchableOpacity style={{ marginLeft: 14 }} onPress={() => setLang('en')}><Text style={styles.langLink}>{T.en}</Text></TouchableOpacity>)}
+      </View>
+
+      {/* Android student picker */}
+      <Modal visible={pickerOpen} transparent animationType="fade" onRequestClose={() => setPickerOpen(false)}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setPickerOpen(false)}>
+          <View style={styles.modalSheet}>
+            {children.map((c, idx) => (
+              <TouchableOpacity key={c.id} style={styles.modalRow} onPress={() => { setSelectedIndex(idx); setPickerOpen(false); }}>
+                <Text style={styles.modalRowText}>{c.name || `#${c.id}`}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
 
+/* ---------- Cards & Calendar ---------- */
+
+function SectionCard({
+  icon,
+  title,
+  children,
+  onPress,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  title: string;
+  children?: React.ReactNode;
+  onPress?: () => void;
+}) {
+  return (
+    <Pressable style={styles.card} onPress={onPress}>
+      <View style={styles.cardHeader}>
+        <View style={styles.cardTitleRow}>
+          <View style={styles.cardIconCircle}><Ionicons name={icon} size={20} color={BLUE} /></View>
+          <Text style={styles.cardTitle}>{title}</Text>
+        </View>
+        <View style={styles.arrowCircle}><Ionicons name="chevron-forward" size={18} color="#fff" /></View>
+      </View>
+      {children ? <View style={styles.cardBody}>{children}</View> : null}
+    </Pressable>
+  );
+}
+
+function CalendarStub() {
+  const days = ['日', '一', '二', '三', '四', '五', '六'];
+  const grid: (string | number)[] = [...Array(6).fill(''), 1,2,3,4,5,6,7, 8,9,10,11,12,13,14, 15,16,17,18,19,20,21, 22,23,24,25,26,27,28, 29,30,31];
+  return (
+    <View>
+      <View style={styles.calendarWeekRow}>
+        {days.map(d => <Text key={d} style={styles.calendarWeekDay}>{d}</Text>)}
+      </View>
+      <View style={styles.calendarGrid}>
+        {grid.map((d, i) => (
+          <View key={i} style={styles.calendarCell}>
+            <Text style={styles.calendarDayText}>{String(d || '')}</Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+/* ---------- Styles ---------- */
+
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#fff' },
-  container: { flex: 1, alignItems: 'center', paddingHorizontal: 24, paddingBottom: 24 },
-  logo: { width: 160, height: 160, marginTop: 12, marginBottom: 8 },
-  title: { fontSize: 22, fontWeight: '700', color: BLUE_DARK, marginBottom: 12, alignSelf: 'flex-start' },
+  safe: { flex: 1, backgroundColor: BLUE },
+  scroll: { paddingBottom: 90 },
 
-  card: { width: '100%', borderWidth: 1, borderColor: BORDER, borderRadius: 12, padding: 14, marginTop: 10 },
-  cardTitle: { fontSize: 16, fontWeight: '700', marginBottom: 6, color: '#111827' },
-  label: { fontSize: 13, color: '#6b7280' },
-  value: { fontSize: 15, color: '#111827' },
-  mono: { fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace' }), fontSize: 12, color: '#111827' },
+  headerWrap: { width: '100%', position: 'relative', backgroundColor: BLUE },
+  headerImg:  { width: '100%', height: 94 }, // adjust to your banner height
+  nameBadge: {
+    position: 'absolute',
+    right: 12, bottom: 10,
+    backgroundColor: BLUE_BG,
+    borderRadius: 14,
+    paddingVertical: 6, paddingHorizontal: 10,
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+  },
+  nameText: { color: BLUE, fontWeight: '700', maxWidth: 200 },
 
-  rowBetween: { flexDirection: 'row', justifyContent: 'space-between' },
-  childLeft: { fontSize: 14, color: '#111827' },
-  childRight: { fontSize: 14, color: '#374151' },
+  sections: { paddingHorizontal: 16, paddingTop: 12, gap: 12 },
 
-  sep: { height: 1, backgroundColor: BORDER, marginVertical: 8 },
-  missing: { marginTop: 8, color: '#6b7280', alignSelf: 'flex-start' },
+  card: {
+    backgroundColor: CARD_BG,
+    borderRadius: 16,
+    paddingVertical: 12, paddingHorizontal: 12,
+    shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 8, shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  cardHeader: { paddingVertical: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  cardTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  cardIconCircle: { width: 34, height: 34, borderRadius: 17, backgroundColor: BLUE_BG, alignItems: 'center', justifyContent: 'center' },
+  cardTitle: { fontSize: 20, color: BLUE, fontWeight: '800' },
+  arrowCircle: { width: 28, height: 28, borderRadius: 14, backgroundColor: BLUE_LIGHT, alignItems: 'center', justifyContent: 'center' },
+  cardBody: { paddingTop: 10 },
+
+  // Calendar
+  calendarWeekRow: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 6, marginBottom: 6 },
+  calendarWeekDay: { width: `${100 / 7}%`, textAlign: 'center', color: '#6b7280', fontWeight: '600' },
+  calendarGrid: { flexDirection: 'row', flexWrap: 'wrap', borderTopWidth: StyleSheet.hairlineWidth, borderLeftWidth: StyleSheet.hairlineWidth, borderColor: BORDER },
+  calendarCell: { width: `${100 / 7}%`, aspectRatio: 1, borderRightWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: BORDER, alignItems: 'center', justifyContent: 'center' },
+  calendarDayText: { color: '#111827' },
+
+  // Bottom bar
+  bottomBar: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 64, backgroundColor: BLUE, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', paddingBottom: 8, paddingTop: 8 },
+  bottomBtn: { padding: 8 },
+
+  // Language links
+  langBottomRight: { position: 'absolute', right: 14, bottom: 70, flexDirection: 'row', alignItems: 'center' },
+  langLink: { color: BLUE, fontSize: 14, fontWeight: '600' },
+
+  // Android picker
+  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.25)', alignItems: 'center', justifyContent: 'center' },
+  modalSheet: { backgroundColor: '#fff', borderRadius: 12, minWidth: 260, paddingVertical: 4, overflow: 'hidden' },
+  modalRow: { paddingHorizontal: 16, paddingVertical: 12 },
+  modalRowText: { fontSize: 16, color: '#111827' },
 });

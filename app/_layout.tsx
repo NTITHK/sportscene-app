@@ -56,7 +56,7 @@ function RootNavigator() {
       <Stack.Screen name="(auth)/register" options={{ title: 'Register' }} />
       <Stack.Screen name="(auth)/forgot" options={{ title: 'Forgot Password' }} />
       <Stack.Screen name="index" options={{ title: 'Home' }} />
-      <Stack.Screen name="member_profile" options={{ title: 'Profile' }} />
+      <Stack.Screen name="member_profile" options={{ headerShown: false }} />
       <Stack.Screen name="members/index" options={{ title: 'Members' }} />
     </Stack>
   );
