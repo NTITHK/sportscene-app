@@ -23,7 +23,7 @@ experiments: {
 typedRoutes: true
 },
 extra: {
-apiBaseUrl: 'https://app.sportsceneltd.com', // ← set this to your real API base URL
+apiBaseUrl: 'https://app-test.sportsceneltd.com', // ← set this to your real API base URL
 apiPaths: {
 login: '/api/login.php',
 register: '/api/register.php',

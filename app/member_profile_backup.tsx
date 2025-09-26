@@ -1,79 +1,38 @@
 import { getSession } from '@/lib/session';
-// If available in your project. If not, the fallback below will be used.
-import { clearSession as clearSessionFn } from '@/lib/session';
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  ActionSheetIOS,
-  Alert,
-  Image,
-  Modal,
-  Platform,
-  Pressable,
-  SafeAreaView,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    ActionSheetIOS,
+    Alert,
+    Image,
+    Modal,
+    Platform,
+    Pressable,
+    SafeAreaView,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 
-type Child = { id: number; ename: string; ename?: string; dob?: string };
+type Child = { id: number; name: string; e_name?: string; dob?: string };
 type Lang = 'zh-Hant' | 'zh-Hans' | 'en';
 
 const BLUE = '#1561AF';
 const BLUE_LIGHT = '#1d69d8';
 const BLUE_BG = '#e6eefc';
+const SCREEN_BG = '#f2f6fb';
 const CARD_BG = '#ffffff';
 const BORDER = '#e5e7eb';
 
 const STR = {
-  'zh-Hant': {
-    notices: '通告',
-    bills: '賬單',
-    classes: '課堂日期',
-    chooseStudent: '選擇學生',
-    showApi: '顯示 API 內容',
-    logout: '登出',
-    cancel: '取消',
-    apiTitle: 'API 回應',
-    close: '關閉',
-    han: '繁',
-    hans: '简',
-    en: 'English',
-  },
-  'zh-Hans': {
-    notices: '通告',
-    bills: '账单',
-    classes: '课堂日期',
-    chooseStudent: '选择学生',
-    showApi: '显示 API 内容',
-    logout: '登出',
-    cancel: '取消',
-    apiTitle: 'API 回应',
-    close: '关闭',
-    han: '繁',
-    hans: '简',
-    en: 'English',
-  },
-  en: {
-    notices: 'Notices',
-    bills: 'Bills',
-    classes: 'Class Dates',
-    chooseStudent: 'Choose student',
-    showApi: 'Show API data',
-    logout: 'Logout',
-    cancel: 'Cancel',
-    apiTitle: 'API Response',
-    close: 'Close',
-    han: '繁',
-    hans: '简',
-    en: 'English',
-  },
+  'zh-Hant': { notices: '通告', bills: '賬單', classes: '課堂日期', chooseStudent: '選擇學生', han: '繁', hans: '简', en: 'English', qr: 'QR 碼' },
+  'zh-Hans': { notices: '通告', bills: '账单', classes: '课堂日期', chooseStudent: '选择学生', han: '繁', hans: '简', en: 'English', qr: '二维码' },
+  en:        { notices: 'Notices', bills: 'Bills', classes: 'Class Dates', chooseStudent: 'Choose student', han: '繁', hans: '简', en: 'English', qr: 'QR Code' },
 } as const;
 
 export default function MemberProfile() {
@@ -84,11 +43,7 @@ export default function MemberProfile() {
   const [children, setChildren] = useState<Child[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [pickerOpen, setPickerOpen] = useState(false);
-
-  const [qrOpen, setQrOpen] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false); // Android fallback
-  const [apiModalOpen, setApiModalOpen] = useState(false);
-  const [apiRaw, setApiRaw] = useState<string>('');
+  const [qrOpen, setQrOpen] = useState(false); // ← QR modal
 
   const student = useMemo(() => children[selectedIndex], [children, selectedIndex]);
   const hasMultiple = children.length > 1;
@@ -99,9 +54,6 @@ export default function MemberProfile() {
         const session = await getSession();
         const kids: Child[] = Array.isArray(session?.children) ? session.children : [];
         setChildren(kids);
-
-        // pretty print raw session for API modal
-        setApiRaw(JSON.stringify(session ?? {}, null, 2));
       } catch {
         Alert.alert(lang === 'en' ? 'Failed to load profile' : '無法載入會員資料');
       }
@@ -114,45 +66,21 @@ export default function MemberProfile() {
       ActionSheetIOS.showActionSheetWithOptions(
         {
           title: T.chooseStudent,
-          options: [...children.map(c => c.name || `#${c.id}`), T.cancel],
+          options: [...children.map(c => c.name || `#${c.id}`), '取消'],
           cancelButtonIndex: children.length,
         },
-        idx => {
-          if (idx !== undefined && idx >= 0 && idx < children.length) setSelectedIndex(idx);
-        }
+        idx => { if (idx !== undefined && idx >= 0 && idx < children.length) setSelectedIndex(idx); }
       );
     } else {
       setPickerOpen(true);
     }
   };
 
-  // Logout and clear session
-  async function fallbackClearSession() {
-    try {
-      await AsyncStorage.removeItem('session');
-    } catch {}
-  }
-  async function doLogout() {
-    try {
-      if (typeof clearSessionFn === 'function') {
-        await clearSessionFn();
-      } else {
-        await fallbackClearSession();
-      }
-    } finally {
-      router.replace('/(public)/landing');
-    }
-  }
-
-  function showApi() {
-    setApiModalOpen(true);
-  }
-
   return (
     <SafeAreaView style={styles.safe}>
       <StatusBar barStyle="light-content" backgroundColor={BLUE} />
       <ScrollView contentContainerStyle={styles.scroll}>
-        {/* Top blue banner flush to top */}
+        {/* Header banner flush to top */}
         <View style={styles.headerWrap}>
           <Image
             source={require('../assets/images/member_header.png')}
@@ -161,7 +89,7 @@ export default function MemberProfile() {
           />
         </View>
 
-        {/* Student selector row BELOW the banner */}
+        {/* Student name row below banner */}
         <View style={styles.studentRow}>
           <Pressable
             style={[styles.nameBadge, !hasMultiple && { paddingRight: 12 }]}
@@ -185,52 +113,34 @@ export default function MemberProfile() {
         </View>
       </ScrollView>
 
-      {/* Bottom bar */}
+      {/* Bottom bar with QR between bell and user */}
       <View style={styles.bottomBar}>
-        {/* Hamburger: menu with Show API / Logout */}
-        <TouchableOpacity
-          style={styles.bottomBtn}
-          onPress={() => {
-            if (Platform.OS === 'ios') {
-              ActionSheetIOS.showActionSheetWithOptions(
-                {
-                  options: [T.showApi, T.logout, T.cancel],
-                  cancelButtonIndex: 2,
-                  destructiveButtonIndex: 1,
-                },
-                idx => {
-                  if (idx === 0) showApi();
-                  if (idx === 1) doLogout();
-                }
-              );
-            } else {
-              setMenuOpen(true);
-            }
-          }}
-        >
-          <Ionicons name="menu" size={26} color="#fff" />
-        </TouchableOpacity>
+        <TouchableOpacity style={styles.bottomBtn}><Ionicons name="menu" size={26} color="#fff" /></TouchableOpacity>
+        <TouchableOpacity style={styles.bottomBtn}><Ionicons name="notifications-outline" size={26} color="#fff" /></TouchableOpacity>
 
-        <TouchableOpacity style={styles.bottomBtn}>
-          <Ionicons name="notifications-outline" size={26} color="#fff" />
-        </TouchableOpacity>
-
-        {/* QR in the middle of bell and user */}
+        {/* NEW: QR icon */}
         <TouchableOpacity style={styles.bottomBtn} onPress={() => setQrOpen(true)}>
           <Ionicons name="qr-code-outline" size={28} color="#fff" />
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.bottomBtn}>
-          <Ionicons name="person-circle-outline" size={26} color="#fff" />
-        </TouchableOpacity>
+        <TouchableOpacity style={styles.bottomBtn}><Ionicons name="person-circle-outline" size={26} color="#fff" /></TouchableOpacity>
       </View>
 
-      {/* Language toggles */}
-      <View style={styles.langBottomRight}>
-        {lang !== 'zh-Hant' && (<TouchableOpacity onPress={() => setLang('zh-Hant')}><Text style={styles.langLink}>{T.han}</Text></TouchableOpacity>)}
-        {lang !== 'zh-Hans' && (<TouchableOpacity style={{ marginLeft: 14 }} onPress={() => setLang('zh-Hans')}><Text style={styles.langLink}>{T.hans}</Text></TouchableOpacity>)}
-        {lang !== 'en' && (<TouchableOpacity style={{ marginLeft: 14 }} onPress={() => setLang('en')}><Text style={styles.langLink}>{T.en}</Text></TouchableOpacity>)}
-      </View>
+      {/* QR Modal: member_id={student.id} + e_name label */}
+      <Modal visible={qrOpen} transparent animationType="fade" onRequestClose={() => setQrOpen(false)}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setQrOpen(false)}>
+          <View style={styles.qrBox}>
+            {student?.id ? (
+              <>
+                <QRCode value={`member_id=${student.id}`} size={220} />
+                <Text style={styles.qrLabel}>{student?.e_name || ''}</Text>
+              </>
+            ) : (
+              <Text style={styles.qrLabel}>{T.qr}</Text>
+            )}
+          </View>
+        </Pressable>
+      </Modal>
 
       {/* Android student picker */}
       <Modal visible={pickerOpen} transparent animationType="fade" onRequestClose={() => setPickerOpen(false)}>
@@ -245,58 +155,12 @@ export default function MemberProfile() {
         </Pressable>
       </Modal>
 
-      {/* QR modal */}
-      <Modal
-        visible={qrOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setQrOpen(false)}
-      >
-        <Pressable style={styles.modalBackdrop} onPress={() => setQrOpen(false)}>
-          <View style={styles.qrBox}>
-            {student?.id && (
-              <QRCode value={`member_id=${student.id}`} size={220} />
-            )}
-            {/* ✅ Always show English name (e_name) under QR */}
-            <Text style={styles.qrName}>
-              {student?.ename ? student.ename : '(no English name)'}
-            </Text>
-          </View>
-        </Pressable>
-      </Modal>
-
-
-      {/* API JSON modal */}
-      <Modal visible={apiModalOpen} transparent animationType="fade" onRequestClose={() => setApiModalOpen(false)}>
-        <Pressable style={styles.modalBackdrop} onPress={() => setApiModalOpen(false)}>
-          <View style={styles.apiBox}>
-            <Text style={styles.apiTitle}>{T.apiTitle}</Text>
-            <ScrollView style={styles.apiScroll} contentContainerStyle={{ paddingBottom: 8 }}>
-              <Text style={styles.apiText}>{apiRaw || (lang === 'en' ? '(empty)' : '(沒有內容)')}</Text>
-            </ScrollView>
-            <TouchableOpacity style={styles.apiCloseBtn} onPress={() => setApiModalOpen(false)}>
-              <Text style={styles.apiCloseTxt}>{T.close}</Text>
-            </TouchableOpacity>
-          </View>
-        </Pressable>
-      </Modal>
-
-      {/* Android menu modal */}
-      <Modal visible={menuOpen} transparent animationType="fade" onRequestClose={() => setMenuOpen(false)}>
-        <Pressable style={styles.modalBackdrop} onPress={() => setMenuOpen(false)}>
-          <View style={styles.modalSheet}>
-            <TouchableOpacity style={styles.modalRow} onPress={() => { setMenuOpen(false); showApi(); }}>
-              <Text style={styles.modalRowText}>{T.showApi}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.modalRow} onPress={() => { setMenuOpen(false); doLogout(); }}>
-              <Text style={[styles.modalRowText, { color: '#b91c1c' }]}>{T.logout}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.modalRow} onPress={() => setMenuOpen(false)}>
-              <Text style={styles.modalRowText}>{T.cancel}</Text>
-            </TouchableOpacity>
-          </View>
-        </Pressable>
-      </Modal>
+      {/* Language links */}
+      <View style={styles.langBottomRight}>
+        {lang !== 'zh-Hant' && (<TouchableOpacity onPress={() => setLang('zh-Hant')}><Text style={styles.langLink}>{T.han}</Text></TouchableOpacity>)}
+        {lang !== 'zh-Hans' && (<TouchableOpacity style={{ marginLeft: 14 }} onPress={() => setLang('zh-Hans')}><Text style={styles.langLink}>{T.hans}</Text></TouchableOpacity>)}
+        {lang !== 'en' && (<TouchableOpacity style={{ marginLeft: 14 }} onPress={() => setLang('en')}><Text style={styles.langLink}>{T.en}</Text></TouchableOpacity>)}
+      </View>
     </SafeAreaView>
   );
 }
@@ -327,8 +191,7 @@ function SectionCard({
 
 function CalendarStub() {
   const days = ['日', '一', '二', '三', '四', '五', '六'];
-  const grid: (string | number)[] = [...Array(6).fill(''),
-    1,2,3,4,5,6,7, 8,9,10,11,12,13,14, 15,16,17,18,19,20,21, 22,23,24,25,26,27,28, 29,30,31];
+  const grid: (string | number)[] = [...Array(6).fill(''), 1,2,3,4,5,6,7, 8,9,10,11,12,13,14, 15,16,17,18,19,20,21, 22,23,24,25,26,27,28, 29,30,31];
   return (
     <View>
       <View style={styles.calendarWeekRow}>
@@ -393,36 +256,23 @@ const styles = StyleSheet.create({
   arrowCircle:  { width: 28, height: 28, borderRadius: 14, backgroundColor: BLUE_LIGHT, alignItems: 'center', justifyContent: 'center' },
   cardBody:     { paddingTop: 10 },
 
-  // Calendar
   calendarWeekRow: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 6, marginBottom: 6 },
   calendarWeekDay: { width: `${100 / 7}%`, textAlign: 'center', color: '#6b7280', fontWeight: '600' },
   calendarGrid:    { flexDirection: 'row', flexWrap: 'wrap', borderTopWidth: StyleSheet.hairlineWidth, borderLeftWidth: StyleSheet.hairlineWidth, borderColor: BORDER },
   calendarCell:    { width: `${100 / 7}%`, aspectRatio: 1, borderRightWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: BORDER, alignItems: 'center', justifyContent: 'center' },
   calendarDayText: { color: '#111827' },
 
-  // Bottom bar
   bottomBar: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 64, backgroundColor: BLUE, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', paddingBottom: 8, paddingTop: 8 },
   bottomBtn: { padding: 8 },
 
-  // Language links
   langBottomRight: { position: 'absolute', right: 14, bottom: 70, flexDirection: 'row', alignItems: 'center' },
   langLink:        { color: BLUE, fontSize: 14, fontWeight: '600' },
 
-  // Modals
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.25)', alignItems: 'center', justifyContent: 'center' },
   modalSheet:    { backgroundColor: '#fff', borderRadius: 12, minWidth: 260, paddingVertical: 4, overflow: 'hidden' },
   modalRow:      { paddingHorizontal: 16, paddingVertical: 12 },
   modalRowText:  { fontSize: 16, color: '#111827' },
 
-  // QR modal
   qrBox:   { backgroundColor: '#fff', padding: 20, borderRadius: 12, alignItems: 'center' },
-  qrName:  { marginTop: 10, fontSize: 16, fontWeight: '600', color: '#111827' },
-
-  // API modal
-  apiBox:      { backgroundColor: '#fff', width: '88%', maxHeight: '70%', borderRadius: 12, padding: 14 },
-  apiTitle:    { fontSize: 16, fontWeight: '700', marginBottom: 8, color: '#111827' },
-  apiScroll:   { maxHeight: 320 },
-  apiText:     { fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace' }), fontSize: 12, color: '#111827' },
-  apiCloseBtn: { alignSelf: 'center', marginTop: 10, paddingHorizontal: 16, paddingVertical: 8, backgroundColor: BLUE, borderRadius: 8 },
-  apiCloseTxt: { color: '#fff', fontWeight: '600' },
+  qrLabel: { marginTop: 12, fontSize: 16, fontWeight: '600', textAlign: 'center', color: '#111827' },
 });
